@@ -39,5 +39,6 @@ http://192.168.x.x/api?action=Timer
 http://192.168.x.x/api?action=Learn
 http://192.168.x.x/api?action=reset&value=true
 ```
+OTA updates work with .bin files!
 
 Use at your own RISK!!
