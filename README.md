@@ -42,3 +42,5 @@ http://192.168.x.x/api?action=reset&value=true
 OTA updates work with .bin files!
 
 I am not a programmer!! Use at your own RISK!!
+
+https://www.maredana.nl/itho-mechanical-ventilation-with-esp8266/
