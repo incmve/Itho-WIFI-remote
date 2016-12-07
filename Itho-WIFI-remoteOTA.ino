@@ -8,12 +8,21 @@
 #include <FS.h>
 #include <SerialCommand.h>
 #include "IthoCC1101.h"
+#include <EEPROM.h>
+
+// WIFI
+String ssid    = "SSID";
+String password = "PASS";
+String espName    = "Itho";
 
 SerialCommand sCmd;
 IthoCC1101 rf;
 IthoPacket packet;
 
-String Version = "0.6";
+String Version = "0.7";
+String laststate;
+String Eeprom_Content;
+String CurrentState;
 
 // Div
 File UploadFile;
@@ -22,10 +31,7 @@ int FSTotal;
 int FSUsed;
 
 
-// WIFI
-String ssid    = "SSID";
-String password = "PASS";
-String espName    = "Itho";
+
 
 // webserver
 ESP8266WebServer  server(80);
@@ -37,7 +43,7 @@ String ClientIP;
 
 
 String header       =  "<html lang='en'><head><title>Itho control panel</title><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><link rel='stylesheet' href='http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css'><script src='https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js'></script><script src='http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js'></script></head><body>";
-String navbar       =  "<nav class='navbar navbar-default'><div class='container-fluid'><div class='navbar-header'><a class='navbar-brand' href='/'>Itho control panel</a></div><div><ul class='nav navbar-nav'><li><a href='/'><span class='glyphicon glyphicon-question-sign'></span> Status</a></li><li class='dropdown'><a class='dropdown-toggle' data-toggle='dropdown' href='#'><span class='glyphicon glyphicon-cog'></span> Tools<span class='caret'></span></a><ul class='dropdown-menu'><li><a href='/updatefwm'>Firmware</a></li><li><a href='/api?action=restart'>Restart</a></ul></li><li><a href='https://github.com/incmve/Itho-WIFI-remote' target='_blank'><span class='glyphicon glyphicon-question-sign'></span> Help</a></li></ul></div></div></nav>  ";
+String navbar       =  "<nav class='navbar navbar-default'><div class='container-fluid'><div class='navbar-header'><a class='navbar-brand' href='/'>Itho control panel</a></div><div><ul class='nav navbar-nav'><li><a href='/'><span class='glyphicon glyphicon-question-sign'></span> Status</a></li><li class='dropdown'><a class='dropdown-toggle' data-toggle='dropdown' href='#'><span class='glyphicon glyphicon-cog'></span> Tools<span class='caret'></span></a><ul class='dropdown-menu'><li><a href='/updatefwm'>Firmware</a></li><li><a href='/api?action=reset&value=true'>Restart</a></ul></li><li><a href='https://github.com/incmve/Itho-WIFI-remote' target='_blank'><span class='glyphicon glyphicon-question-sign'></span> Help</a></li></ul></div></div></nav>  ";
 
 String containerStart   =  "<div class='container'><div class='row'>";
 String containerEnd     =  "<div class='clearfix visible-lg'></div></div></div>";
@@ -72,7 +78,8 @@ void handle_root()
   String title1     = panelHeaderName + String("Itho WIFI remote") + panelHeaderEnd;
   String IPAddClient    = panelBodySymbol + String("globe") + panelBodyName + String("IP Address") + panelBodyValue + ClientIP + panelBodyEnd;
   String ClientName   = panelBodySymbol + String("tag") + panelBodyName + String("Client Name") + panelBodyValue + espName + panelBodyEnd;
-  String ithoVersion   = panelBodySymbol + String("tag") + panelBodyName + String("Version") + panelBodyValue + Version + panelBodyEnd;
+  String ithoVersion   = panelBodySymbol + String("ok") + panelBodyName + String("Version") + panelBodyValue + Version + panelBodyEnd;
+  String State   = panelBodySymbol + String("info-sign") + panelBodyName + String("Current state") + panelBodyValue + CurrentState + panelBodyEnd;
   String Uptime     = panelBodySymbol + String("time") + panelBodyName + String("Uptime") + panelBodyValue + hour() + String(" h ") + minute() + String(" min ") + second() + String(" sec") + panelBodyEnd + panelEnd;
 
 
@@ -81,14 +88,53 @@ void handle_root()
   String commands = panelBodySymbol + panelBodyName + panelcenter + ithocontrol + panelBodyEnd;
 
 
-  server.send ( 200, "text/html", header + navbar + containerStart + title1 + IPAddClient + ClientName + ithoVersion + Uptime + title3 + commands + containerEnd + siteEnd);
+  server.send ( 200, "text/html", header + navbar + containerStart + title1 + IPAddClient + ClientName + ithoVersion + State + Uptime + title3 + commands + containerEnd + siteEnd);
 }
 
+String eepromRead(int StartAddress, int EepromLength)
+{
+ 
+
+    for (int i = StartAddress; i < (StartAddress + EepromLength); ++i)
+    {
+      if (EEPROM.read(i) != 0 && EEPROM.read(i) != 255)
+      {
+        Eeprom_Content += char(EEPROM.read(i));
+      }
+    }
+return Eeprom_Content;
+
+}
+
+void eepromWrite(int StartAddress, int EepromLength, String value)
+{
+    //Clear EEPROM first
+    for (int i = StartAddress; i < (StartAddress + EepromLength); ++i)
+    {
+      EEPROM.write(i, 0);
+    }
+    int bytesCnt = StartAddress;
+    for (int i = 0; i < value.length(); ++i)
+    {
+      EEPROM.write(bytesCnt, value[i]);
+      ++bytesCnt;
+    }
+
+    // Commit changes to EEPROM
+    EEPROM.commit();
+    Serial.println("write");
+    CurrentState = value;
+} 
 
 // Setup
 void setup(void)
 {
   Serial.begin(115200);
+  EEPROM.begin(512); // On esp8266, we need to init EEPROM 
+  String laststate = eepromRead(0,6);
+  CurrentState = laststate;
+  Serial.println("laststate: ");
+  Serial.println(laststate);
   WiFi.hostname(espName);
   // Check if SPIFFS is OK
 
@@ -244,15 +290,19 @@ void loop(void)
           break;
         case IthoLow:
           Serial.print("low\n");
+          eepromWrite(0, 6, "Low");
           break;
         case IthoMedium:
           Serial.print("medium\n");
+          eepromWrite(0, 6, "Medium");
           break;
         case IthoFull:
           Serial.print("full\n");
+          eepromWrite(0, 6, "Full");
           break;
         case IthoTimer1:
           Serial.print("timer1\n");
+          eepromWrite(0, 6, "Timer");
           break;
         case IthoTimer2:
           Serial.print("timer2\n");
@@ -401,6 +451,7 @@ void sendLowSpeed() {
   Serial.println("sending low...");
   rf.sendCommand(IthoLow);
   Serial.println("sending low done.");
+  eepromWrite(0, 6, "Low");
   handle_root();
 }
 
@@ -408,6 +459,7 @@ void sendMediumSpeed() {
   Serial.println("sending medium...");
   rf.sendCommand(IthoMedium);
   Serial.println("sending medium done.");
+  eepromWrite(0, 6, "Medium");
   handle_root();
 }
 
@@ -415,6 +467,7 @@ void sendFullSpeed() {
   Serial.println("sending FullSpeed...");
   rf.sendCommand(IthoFull);
   Serial.println("sending FullSpeed done.");
+  eepromWrite(0, 6, "Full");
   handle_root();
 }
 
@@ -422,6 +475,7 @@ void sendTimer() {
   Serial.println("sending timer...");
   rf.sendCommand(IthoTimer1);
   Serial.println("sending timer done.");
+  eepromWrite(0, 6, "Timer");
   handle_root();
 }
 
