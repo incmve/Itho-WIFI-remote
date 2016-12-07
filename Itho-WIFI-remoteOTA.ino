@@ -11,20 +11,21 @@
 
 SerialCommand sCmd;
 IthoCC1101 rf;
+IthoPacket packet;
 
-String Version = "0.5";
-
-// WIFI
-String ssid    = "SSID";
-String password = "PASS";
-String espName    = "Itho";
-
+String Version = "0.6";
 
 // Div
 File UploadFile;
 String fileName;
 int FSTotal;
 int FSUsed;
+
+
+// WIFI
+String ssid    = "SSID";
+String password = "PASS";
+String espName    = "Itho";
 
 // webserver
 ESP8266WebServer  server(80);
@@ -35,24 +36,8 @@ WiFiClient client;
 String ClientIP;
 
 
-//-------------- FSBrowser application -----------
-//format bytes
-String formatBytes(size_t bytes) {
-  if (bytes < 1024) {
-    return String(bytes) + "B";
-  } else if (bytes < (1024 * 1024)) {
-    return String(bytes / 1024.0) + "KB";
-  } else if (bytes < (1024 * 1024 * 1024)) {
-    return String(bytes / 1024.0 / 1024.0) + "MB";
-  } else {
-    return String(bytes / 1024.0 / 1024.0 / 1024.0) + "GB";
-  }
-}
-
-// HTML
-
 String header       =  "<html lang='en'><head><title>Itho control panel</title><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><link rel='stylesheet' href='http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css'><script src='https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js'></script><script src='http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js'></script></head><body>";
-String navbar       =  "<nav class='navbar navbar-default'><div class='container-fluid'><div class='navbar-header'><a class='navbar-brand' href='/'>Itho control panel</a></div><div><ul class='nav navbar-nav'><li><a href='/'><span class='glyphicon glyphicon-question-sign'></span> Status</a></li><li class='dropdown'><a class='dropdown-toggle' data-toggle='dropdown' href='#'><span class='glyphicon glyphicon-cog'></span> Tools<span class='caret'></span></a><ul class='dropdown-menu'><li><a href='/updatefwm'>Firmware</a></li><li><a href='/api?action=restart'>Restart</a></ul></li><li><a href='https://github.com/incmve/roomba-eps8266/wiki' target='_blank'><span class='glyphicon glyphicon-question-sign'></span> Help</a></li></ul></div></div></nav>  ";
+String navbar       =  "<nav class='navbar navbar-default'><div class='container-fluid'><div class='navbar-header'><a class='navbar-brand' href='/'>Itho control panel</a></div><div><ul class='nav navbar-nav'><li><a href='/'><span class='glyphicon glyphicon-question-sign'></span> Status</a></li><li class='dropdown'><a class='dropdown-toggle' data-toggle='dropdown' href='#'><span class='glyphicon glyphicon-cog'></span> Tools<span class='caret'></span></a><ul class='dropdown-menu'><li><a href='/updatefwm'>Firmware</a></li><li><a href='/api?action=restart'>Restart</a></ul></li><li><a href='https://github.com/incmve/Itho-WIFI-remote' target='_blank'><span class='glyphicon glyphicon-question-sign'></span> Help</a></li></ul></div></div></nav>  ";
 
 String containerStart   =  "<div class='container'><div class='row'>";
 String containerEnd     =  "<div class='clearfix visible-lg'></div></div></div>";
@@ -172,10 +157,10 @@ void setup(void)
 
   server.on ( "/format", handleFormat );
   server.on("/", handle_root);
-  server.on("/", handle_fupload_html);
+
   server.on("/api", handle_api);
   server.on("/updatefwm", handle_updatefwm_html);
-  server.on("/fupload", handle_fupload_html);
+  
 
 
 
@@ -233,6 +218,7 @@ void setup(void)
   server.begin();
   Serial.println("HTTP server started");
   MDNS.addService("http", "tcp", 80);
+  rf.initReceive();
 }
 
 
@@ -244,6 +230,46 @@ void loop(void)
   sCmd.readSerial();
   server.handleClient();
 
+
+    if (rf.checkForNewPacket()) {
+      packet = rf.getLastPacket();
+      //show counter
+      Serial.print("counter=");
+      Serial.print(packet.counter);
+      Serial.print(", ");
+      //show command
+      switch (packet.command) {
+        case IthoUnknown:
+          Serial.print("unknown\n");
+          break;
+        case IthoLow:
+          Serial.print("low\n");
+          break;
+        case IthoMedium:
+          Serial.print("medium\n");
+          break;
+        case IthoFull:
+          Serial.print("full\n");
+          break;
+        case IthoTimer1:
+          Serial.print("timer1\n");
+          break;
+        case IthoTimer2:
+          Serial.print("timer2\n");
+          break;
+        case IthoTimer3:
+          Serial.print("timer3\n");
+          break;
+        case IthoJoin:
+          Serial.print("join\n");
+          break;
+        case IthoLeave:
+          Serial.print("leave\n");
+          break;
+      } // switch (recv) command
+     // checkfornewpacket
+  yield();
+  }
 }
 
 
@@ -302,25 +328,7 @@ void handle_updatefwm_html()
 }
 
 
-void handle_fupload_html()
-{
-  String HTML = "<br>Files on flash:<br>";
-  Dir dir = SPIFFS.openDir("/");
-  while (dir.next())
-  {
-    fileName = dir.fileName();
-    size_t fileSize = dir.fileSize();
-    HTML += fileName.c_str();
-    HTML += " ";
-    HTML += formatBytes(fileSize).c_str();
-    HTML += " , ";
-    HTML += fileSize;
-    HTML += "<br>";
-    //Serial.printf("FS File: %s, size: %s\n", fileName.c_str(), formatBytes(fileSize).c_str());
-  }
 
-  server.send ( 200, "text/html", "<form method='POST' action='/fupload2' enctype='multipart/form-data'><input type='file' name='update' multiple><input type='submit' value='Update'></form><br<b>For webfiles only!!</b>Multiple files possible<br>" + HTML);
-}
 
 
 
@@ -356,20 +364,7 @@ void handle_update_html2()
   server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
   ESP.restart();
 }
-void handleFileDelete()
-{
-  if (server.args() == 0) return server.send(500, "text/plain", "BAD ARGS");
-  String path = server.arg(0);
-  if (!path.startsWith("/")) path = "/" + path;
-  Serial.println("handleFileDelete: " + path);
-  if (path == "/")
-    return server.send(500, "text/plain", "BAD PATH");
-  if (!SPIFFS.exists(path))
-    return server.send(404, "text/plain", "FileNotFound");
-  SPIFFS.remove(path);
-  server.send(200, "text/plain", "");
-  path = String();
-}
+
 void handleFormat()
 {
   server.send ( 200, "text/html", "OK");
