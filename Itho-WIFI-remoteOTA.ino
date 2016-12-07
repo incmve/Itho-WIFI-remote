@@ -12,13 +12,28 @@
 SerialCommand sCmd;
 IthoCC1101 rf;
 
-String Version = "0.4";
+String Version = "0.5";
+
+// WIFI
+String ssid    = "SSID";
+String password = "PASS";
+String espName    = "Itho";
+
 
 // Div
 File UploadFile;
 String fileName;
 int FSTotal;
 int FSUsed;
+
+// webserver
+ESP8266WebServer  server(80);
+MDNSResponder   mdns;
+WiFiClient client;
+
+
+String ClientIP;
+
 
 //-------------- FSBrowser application -----------
 //format bytes
@@ -34,19 +49,7 @@ String formatBytes(size_t bytes) {
   }
 }
 
-// WIFI
-String ssid    = "SSID";
-String password = "PASS";
-String espName    = "Itho";
-
-// webserver
-ESP8266WebServer  server(80);
-MDNSResponder   mdns;
-WiFiClient client;
-
-
-String ClientIP;
-
+// HTML
 
 String header       =  "<html lang='en'><head><title>Itho control panel</title><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><link rel='stylesheet' href='http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css'><script src='https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js'></script><script src='http://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js'></script></head><body>";
 String navbar       =  "<nav class='navbar navbar-default'><div class='container-fluid'><div class='navbar-header'><a class='navbar-brand' href='/'>Itho control panel</a></div><div><ul class='nav navbar-nav'><li><a href='/'><span class='glyphicon glyphicon-question-sign'></span> Status</a></li><li class='dropdown'><a class='dropdown-toggle' data-toggle='dropdown' href='#'><span class='glyphicon glyphicon-cog'></span> Tools<span class='caret'></span></a><ul class='dropdown-menu'><li><a href='/updatefwm'>Firmware</a></li><li><a href='/api?action=restart'>Restart</a></ul></li><li><a href='https://github.com/incmve/roomba-eps8266/wiki' target='_blank'><span class='glyphicon glyphicon-question-sign'></span> Help</a></li></ul></div></div></nav>  ";
@@ -76,7 +79,7 @@ String ithocontrol     =  "<a href='/api?action=Low'<button type='button' class=
 // ROOT page
 void handle_root()
 {
-// get IP
+  // get IP
   IPAddress ip = WiFi.localIP();
   ClientIP = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
   delay(500);
@@ -94,14 +97,16 @@ void handle_root()
 
 
   server.send ( 200, "text/html", header + navbar + containerStart + title1 + IPAddClient + ClientName + ithoVersion + Uptime + title3 + commands + containerEnd + siteEnd);
-  }
+}
 
 
 // Setup
 void setup(void)
 {
   Serial.begin(115200);
+  WiFi.hostname(espName);
   // Check if SPIFFS is OK
+
   if (!SPIFFS.begin())
   {
     Serial.println("SPIFFS failed, needs formatting");
@@ -133,7 +138,7 @@ void setup(void)
   }
   if (WiFi.status() != WL_CONNECTED && i >= 30)
   {
-WiFi.disconnect();
+    WiFi.disconnect();
     delay(1000);
     Serial.println("");
     Serial.println("Couldn't connect to network :( ");
@@ -151,7 +156,7 @@ WiFi.disconnect();
     Serial.println(espName);
 
   }
-delay(500);
+  delay(500);
   Serial.println("setup begin");
   rf.init();
   Serial.println("setup done");
@@ -164,14 +169,14 @@ delay(500);
   sCmd.addCommand("Timer", sendTimer);
   sCmd.addCommand("Learn", sendRegister);        // Register remote in ithon fan
   sCmd.setDefaultHandler(unrecognized);      // Handler for command that isn't matched  (says "What?")
-  
+
   server.on ( "/format", handleFormat );
   server.on("/", handle_root);
   server.on("/", handle_fupload_html);
   server.on("/api", handle_api);
   server.on("/updatefwm", handle_updatefwm_html);
   server.on("/fupload", handle_fupload_html);
-  
+
 
 
   // Upload firmware:
@@ -215,7 +220,7 @@ delay(500);
     }
     yield();
   });
-  
+
 
 
   if (!mdns.begin(espName.c_str(), WiFi.localIP())) {
@@ -224,8 +229,10 @@ delay(500);
       delay(1000);
     }
   }
+
   server.begin();
   Serial.println("HTTP server started");
+  MDNS.addService("http", "tcp", 80);
 }
 
 
@@ -234,7 +241,7 @@ delay(500);
 // LOOP
 void loop(void)
 {
-sCmd.readSerial();
+  sCmd.readSerial();
   server.handleClient();
 
 }
@@ -243,8 +250,8 @@ sCmd.readSerial();
 // VOID setups
 
 void handle_api()
-{ 
-// Get vars for all commands
+{
+  // Get vars for all commands
   String action = server.arg("action");
   String value = server.arg("value");
   String api = server.arg("api");
