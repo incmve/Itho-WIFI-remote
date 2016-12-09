@@ -1,5 +1,4 @@
 // Includes
-#include <Time.h>
 #include <ESP8266mDNS.h>
 #include <ESP8266WiFi.h>
 #include <SPI.h>
@@ -11,6 +10,8 @@
 #include <EEPROM.h>
 #include "Base64.h"
 #include <WiFiClient.h>
+#include <TimeLib.h>
+
 
 
 // WIFI
@@ -18,7 +19,7 @@ String ssid    = "SSID";
 String password = "PASS";
 String espName    = "Itho";
 
-String Version = "0.8";
+String Version = "0.8.1";
 
 
 // Pimatic settings
