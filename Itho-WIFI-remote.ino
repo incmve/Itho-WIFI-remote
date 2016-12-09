@@ -416,6 +416,8 @@ void handle_api()
   {
     sendTimer();
     ++timerx10;
+    Serial.println("Timer api");
+    Serial.println(timerx10);
     server.send ( 200, "text/html", "Timer on selected");
   }
 
@@ -550,7 +552,7 @@ void sendTimer() {
   eepromWrite(0, 6, "Timer");
   handle_pimatic(CurrentState, var);
   time2 = millis();
-  ++timerx10;
+  //++timerx10;
   Serial.println("Timer state: : ");
   Serial.println(timerx10);
   handle_root();
