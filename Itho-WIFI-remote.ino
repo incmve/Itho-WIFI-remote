@@ -82,7 +82,7 @@ String inputBodyStart   =  "<form action='' method='POST'><div class='panel pane
 String inputBodyName    =  "<div class='form-group'><div class='input-group'><span class='input-group-addon' id='basic-addon1'>";
 String inputBodyPOST    =  "</span><input type='text' name='";
 String inputBodyClose   =  "' class='form-control' aria-describedby='basic-addon1'></div></div>";
-String ithocontrol     =  "<a href='/api?action=Low'<button type='button' class='btn btn-default'> Low</button></a><a href='/api?action=Medium'<button type='button' class='btn btn-default'> Medium</button></a><a href='/api?action=High'<button type='button' class='btn btn-default'> High</button><a href='/api?action=Timer'<button type='button' class='btn btn-default'> Timer</button></a></a><br><a href='/api?action=Learn'<button type='button' class='btn btn-default'> Learn</button></a></div>";
+String ithocontrol     =  "<a href='/button?action=Low'<button type='button' class='btn btn-default'> Low</button></a><a href='/button?action=Medium'<button type='button' class='btn btn-default'> Medium</button></a><a href='/button?action=High'<button type='button' class='btn btn-default'> High</button><a href='/button?action=Timer'<button type='button' class='btn btn-default'> Timer</button></a></a><br><a href='/button?action=Learn'<button type='button' class='btn btn-default'> Learn</button></a></div>";
 
 
 
@@ -227,6 +227,7 @@ void setup(void)
   server.on("/", handle_root);
 
   server.on("/api", handle_api);
+  server.on("/button", handle_buttons);
   server.on("/updatefwm", handle_updatefwm_html);
 
 
@@ -392,7 +393,6 @@ void handle_api()
   {
     sendFullSpeed();
     time2 = millis();
-    timerx10 = 0;
     server.send ( 200, "text/html", "Full Powerrr!!!");
   }
 
@@ -400,7 +400,6 @@ void handle_api()
   {
     sendMediumSpeed();
     time2 = millis();
-    timerx10 = 0;
     server.send ( 200, "text/html", "Medium speed selected");
   }
 
@@ -408,16 +407,12 @@ void handle_api()
   {
     sendLowSpeed();
     time2 = millis();
-    timerx10 = 0;
     server.send ( 200, "text/html", "Slow speed selected");
   }
 
   if (action == "Timer")
   {
     sendTimer();
-    ++timerx10;
-    Serial.println("Timer api");
-    Serial.println(timerx10);
     server.send ( 200, "text/html", "Timer on selected");
   }
 
@@ -435,6 +430,44 @@ void handle_api()
     Serial.println("RESET");
     ESP.restart();
   }
+}
+
+void handle_buttons()
+{
+  // Get vars for all commands
+  String action = server.arg("action");
+  String api = server.arg("api");
+
+  if (action == "High")
+  {
+    handle_root();
+    sendFullSpeed();
+  }
+
+  if (action == "Medium")
+  {
+    handle_root();
+    sendMediumSpeed();
+  }
+
+  if (action == "Low")
+  {
+    handle_root();
+    sendLowSpeed();
+  }
+
+  if (action == "Timer")
+  {
+    handle_root();
+    sendTimer();
+  }
+
+  if (action == "Learn")
+  {
+    handle_root();
+    sendRegister();
+  }
+
 }
 
 void handle_updatefwm_html()
@@ -509,7 +542,7 @@ void sendRegister() {
   Serial.println("sending join...");
   rf.sendCommand(IthoJoin);
   Serial.println("sending join done.");
-  handle_root();
+  //handle_root();
 }
 
 void sendLowSpeed() {
@@ -520,7 +553,7 @@ void sendLowSpeed() {
   handle_pimatic(CurrentState, var);
   time2 = millis();
   timerx10 = 0;
-  handle_root();
+  //handle_root();
 }
 
 void sendMediumSpeed() {
@@ -531,7 +564,7 @@ void sendMediumSpeed() {
   handle_pimatic(CurrentState, var);
   time2 = millis();
   timerx10 = 0;
-  handle_root();
+  // handle_root();
 }
 
 void sendFullSpeed() {
@@ -542,7 +575,7 @@ void sendFullSpeed() {
   handle_pimatic(CurrentState, var);
   time2 = millis();
   timerx10 = 0;
-  handle_root();
+  //  handle_root();
 }
 
 void sendTimer() {
@@ -552,10 +585,10 @@ void sendTimer() {
   eepromWrite(0, 6, "Timer");
   handle_pimatic(CurrentState, var);
   time2 = millis();
-  //++timerx10;
+  ++timerx10;
   Serial.println("Timer state: : ");
   Serial.println(timerx10);
-  handle_root();
+  // handle_root();
 }
 
 
