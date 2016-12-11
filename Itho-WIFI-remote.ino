@@ -11,6 +11,7 @@
 #include "Base64.h"
 #include <WiFiClient.h>
 #include <TimeLib.h>
+#include "DHT.h"
 
 
 
@@ -27,7 +28,9 @@ String host   = "192.168.0.198";
 const int httpPort    = 80;
 String Username     = "admin";
 String Password     = "admin";
-String var = "ithostate";
+String varItho = "ithostate";
+String varHumidity = "DHTHumidity";
+String varTemperature = "DHTTemperature";
 
 char authVal[40];
 char authValEncoded[40];
@@ -35,10 +38,19 @@ String ClientIP;
 #define BASE64_LEN 40
 char unameenc[BASE64_LEN];
 
+// DHT settings
+#define DHTPIN D2     // what digital pin we're connected to
+#define DHTTYPE DHT22   // DHT 22
+DHT dht(DHTPIN, DHTTYPE); // Initialize DHT sensor
+long dht_sendInterval    = 60000; //in millis
+long dht_lastInterval  = 0;
+long DHTEnabled     = 1; //1 is on
+
 
 String laststate;
-String Eeprom_Content;
 String CurrentState;
+String CurrentHumidity;
+String CurrentTemperature;
 
 // Div
 File UploadFile;
@@ -73,6 +85,7 @@ String panelHeaderEnd   =  "</h1></div>";
 String panelEnd       =  "</div>";
 
 String panelBodySymbol    =  "<div class='panel panel-default'><div class='panel-body'><span class='glyphicon glyphicon-";
+String panelBodyDuoSymbol    =  "</span></div><div class='panel-body'><span class='glyphicon glyphicon-";
 String panelBodyName    =  "'></span> ";
 String panelBodyValue   =  "<span class='pull-right'>";
 String panelcenter   =  "<div class='row'><div class='span6' style='text-align:center'>";
@@ -99,6 +112,7 @@ void handle_root()
   String ClientName   = panelBodySymbol + String("tag") + panelBodyName + String("Client Name") + panelBodyValue + espName + panelBodyEnd;
   String ithoVersion   = panelBodySymbol + String("ok") + panelBodyName + String("Version") + panelBodyValue + Version + panelBodyEnd;
   String State   = panelBodySymbol + String("info-sign") + panelBodyName + String("Current state") + panelBodyValue + CurrentState + panelBodyEnd;
+  String DHTsensor   = panelBodySymbol + String("fire") + panelBodyName + String("Temperature") + panelBodyValue + CurrentTemperature + String(" °C") + panelBodyDuoSymbol + String("tint") + panelBodyName + String("Humidity") + panelBodyValue + CurrentHumidity + String(" %") + panelBodyEnd;
   String Uptime     = panelBodySymbol + String("time") + panelBodyName + String("Uptime") + panelBodyValue + hour() + String(" h ") + minute() + String(" min ") + second() + String(" sec") + panelBodyEnd + panelEnd;
 
 
@@ -107,13 +121,13 @@ void handle_root()
   String commands = panelBodySymbol + panelBodyName + panelcenter + ithocontrol + panelBodyEnd;
 
 
-  server.send ( 200, "text/html", header + navbar + containerStart + title1 + IPAddClient + ClientName + ithoVersion + State + Uptime + title3 + commands + containerEnd + siteEnd);
+  server.send ( 200, "text/html", header + navbar + containerStart + title1 + IPAddClient + ClientName + ithoVersion + State + DHTsensor + Uptime + title3 + commands + containerEnd + siteEnd);
 }
 
 String eepromRead(int StartAddress, int EepromLength)
 {
 
-
+  String Eeprom_Content;
   for (int i = StartAddress; i < (StartAddress + EepromLength); ++i)
   {
     if (EEPROM.read(i) != 0 && EEPROM.read(i) != 255)
@@ -288,6 +302,10 @@ void setup(void)
   Serial.println("HTTP server started");
   MDNS.addService("http", "tcp", 80);
   rf.initReceive();
+
+  //start DHT sensor
+  dht.begin();
+  Serial.println("DHT sensor started");
 }
 
 
@@ -315,9 +333,15 @@ void loop(void)
     timerx10 = 0;
     Serial.println("Returning to low.");
     eepromWrite(0, 6, "Low");
-    handle_pimatic(CurrentState, var);
+    handle_pimatic(CurrentState, varItho);
     handle_root();
 
+  }
+
+  if (millis() - dht_lastInterval > dht_sendInterval && DHTEnabled == 1)
+  {
+    handle_DHT();
+    dht_lastInterval = millis();
   }
 }
 
@@ -341,22 +365,22 @@ void my_interrupt_handler()
       case IthoLow:
         Serial.print("low\n");
         eepromWrite(0, 6, "Low");
-        handle_pimatic(CurrentState, var);
+        handle_pimatic(CurrentState, varItho);
         break;
       case IthoMedium:
         Serial.print("medium\n");
         eepromWrite(0, 6, "Medium");
-        handle_pimatic(CurrentState, var);
+        handle_pimatic(CurrentState, varItho);
         break;
       case IthoFull:
         Serial.print("full\n");
         eepromWrite(0, 6, "Full");
-        handle_pimatic(CurrentState, var);
+        handle_pimatic(CurrentState, varItho);
         break;
       case IthoTimer1:
         Serial.print("timer1\n");
         eepromWrite(0, 6, "Timer");
-        handle_pimatic(CurrentState, var);
+        handle_pimatic(CurrentState, varItho);
         time2 = millis();
         ++timerx10;
         break;
@@ -384,7 +408,7 @@ void my_interrupt_handler()
 
 void handle_api()
 {
-  // Get vars for all commands
+  // Get var for all commands
   String action = server.arg("action");
   String value = server.arg("value");
   String api = server.arg("api");
@@ -429,6 +453,12 @@ void handle_api()
     delay(500);
     Serial.println("RESET");
     ESP.restart();
+  }
+
+  if (action == "DHT")
+  {
+    handle_DHT();
+    server.send ( 200, "text/html", "DHT");
   }
 }
 
@@ -550,7 +580,7 @@ void sendLowSpeed() {
   rf.sendCommand(IthoLow);
   Serial.println("sending low done.");
   eepromWrite(0, 6, "Low");
-  handle_pimatic(CurrentState, var);
+  handle_pimatic(CurrentState, varItho);
   time2 = millis();
   timerx10 = 0;
   //handle_root();
@@ -561,7 +591,7 @@ void sendMediumSpeed() {
   rf.sendCommand(IthoMedium);
   Serial.println("sending medium done.");
   eepromWrite(0, 6, "Medium");
-  handle_pimatic(CurrentState, var);
+  handle_pimatic(CurrentState, varItho);
   time2 = millis();
   timerx10 = 0;
   // handle_root();
@@ -572,7 +602,7 @@ void sendFullSpeed() {
   rf.sendCommand(IthoFull);
   Serial.println("Now running at maximum speed!");
   eepromWrite(0, 6, "High");
-  handle_pimatic(CurrentState, var);
+  handle_pimatic(CurrentState, varItho);
   time2 = millis();
   timerx10 = 0;
   //  handle_root();
@@ -583,12 +613,40 @@ void sendTimer() {
   rf.sendCommand(IthoTimer1);
   Serial.println("sending timer done.");
   eepromWrite(0, 6, "Timer");
-  handle_pimatic(CurrentState, var);
+  handle_pimatic(CurrentState, varItho);
   time2 = millis();
   ++timerx10;
   Serial.println("Timer state: : ");
   Serial.println(timerx10);
   // handle_root();
+}
+
+void handle_DHT() {
+  // Reading temperature or humidity takes about 250 milliseconds!
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  float h = dht.readHumidity();
+  // Read temperature as Celsius (the default)
+  float t = dht.readTemperature();
+
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+
+  CurrentHumidity = String(h);
+  CurrentTemperature = String(t);
+
+  handle_pimatic(CurrentHumidity, varHumidity);
+  handle_pimatic(CurrentTemperature, varTemperature);
+
+  Serial.print("Humidity: ");
+  Serial.print(CurrentHumidity);
+  Serial.print(" %\t");
+  Serial.print("Temperature: ");
+  Serial.print(CurrentTemperature);
+  Serial.print(" *C \n");
+  
 }
 
 
