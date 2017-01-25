@@ -225,7 +225,7 @@ void setup(void)
   }
   delay(500);
   Serial.println("setup begin");
-  // rf.init();
+  rf.init();
   Serial.println("setup done");
   //sendRegister(); // Your Itho only accepts this command while in learning mode, powercycle your itho then start the nodemcu.
   Serial.println("join command sent");
@@ -301,7 +301,7 @@ void setup(void)
   server.begin();
   Serial.println("HTTP server started");
   MDNS.addService("http", "tcp", 80);
-  rf.initReceive();
+  rf.initReceive(); //put in receive mode
 
   //start DHT sensor
   dht.begin();
@@ -412,6 +412,12 @@ void handle_api()
   String action = server.arg("action");
   String value = server.arg("value");
   String api = server.arg("api");
+
+  if (action == "Receive")
+  {
+    rf.initReceive();
+    server.send ( 200, "text/html", "Receive mode");
+  }
 
   if (action == "High")
   {
@@ -571,6 +577,7 @@ void handleFormat()
 void sendRegister() {
   Serial.println("sending join...");
   rf.sendCommand(IthoJoin);
+  rf.initReceive(); //turn back in receive mode
   Serial.println("sending join done.");
   //handle_root();
 }
@@ -578,6 +585,7 @@ void sendRegister() {
 void sendLowSpeed() {
   Serial.println("sending low...");
   rf.sendCommand(IthoLow);
+  rf.initReceive(); //turn back in receive mode
   Serial.println("sending low done.");
   eepromWrite(0, 6, "Low");
   handle_pimatic(CurrentState, varItho);
@@ -589,6 +597,7 @@ void sendLowSpeed() {
 void sendMediumSpeed() {
   Serial.println("sending medium...");
   rf.sendCommand(IthoMedium);
+  rf.initReceive(); //turn back in receive mode
   Serial.println("sending medium done.");
   eepromWrite(0, 6, "Medium");
   handle_pimatic(CurrentState, varItho);
@@ -600,6 +609,7 @@ void sendMediumSpeed() {
 void sendFullSpeed() {
   Serial.println("Full speed captain!");
   rf.sendCommand(IthoFull);
+  rf.initReceive(); //turn back in receive mode
   Serial.println("Now running at maximum speed!");
   eepromWrite(0, 6, "High");
   handle_pimatic(CurrentState, varItho);
@@ -611,6 +621,7 @@ void sendFullSpeed() {
 void sendTimer() {
   Serial.println("sending timer...");
   rf.sendCommand(IthoTimer1);
+  rf.initReceive(); //turn back in receive mode
   Serial.println("sending timer done.");
   eepromWrite(0, 6, "Timer");
   handle_pimatic(CurrentState, varItho);
