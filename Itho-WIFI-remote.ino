@@ -163,6 +163,7 @@ void eepromWrite(int StartAddress, int EepromLength, String value)
 void setup(void)
 {
   Serial.begin(115200);
+  WiFi.mode(WIFI_STA);
   EEPROM.begin(512); // On esp8266, we need to init EEPROM
   String laststate = eepromRead(0, 6);
   CurrentState = laststate;
