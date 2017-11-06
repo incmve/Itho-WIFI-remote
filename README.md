@@ -44,3 +44,5 @@ OTA updates work with .bin files!
 I am not a programmer!! Use at your own RISK!!
 
 https://www.maredana.nl/itho-mechanical-ventilation-with-esp8266/
+
+There is also a MQTT version https://github.com/incmve/Itho-WIFI-remoteMQTT
