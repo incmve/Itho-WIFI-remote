@@ -1,3 +1,8 @@
+# This repo is no longer maintained, I switched all my projects to ESPHOME.
+# The itho version can be fount here: https://github.com/incmve/ESPHome-Itho
+
+
+
 # IthoEcoFanRFT
 Cloned from https://github.com/supersjimmie/IthoEcoFanRFT
 
